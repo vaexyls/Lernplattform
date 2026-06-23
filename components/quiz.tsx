@@ -1,19 +1,19 @@
 "use client"
 
-import { useState } from "react"
+import * as React from "react"
 import { Check, RotateCcw, X } from "lucide-react"
 import { motion } from "motion/react"
-import type { Chapter } from "@/lib/course-data"
+import type { Category } from "@/lib/course-data"
 import { cn } from "@/lib/utils"
 
 type QuizProps = {
-  chapter: Chapter
+  category: Category
   answeredIds: string[]
   onAnswerCorrect: (id: string) => void
 }
 
-export function Quiz({ chapter, answeredIds, onAnswerCorrect }: QuizProps) {
-  const [selections, setSelections] = useState<Record<string, number>>({})
+export function Quiz({ category, answeredIds, onAnswerCorrect }: QuizProps) {
+  const [selections, setSelections] = React.useState<Record<string, number>>({})
 
   function select(questionId: string, optionIndex: number, correct: number) {
     if (selections[questionId] !== undefined) return
@@ -25,7 +25,7 @@ export function Quiz({ chapter, answeredIds, onAnswerCorrect }: QuizProps) {
     setSelections({})
   }
 
-  const correctCount = chapter.quiz.filter(
+  const correctCount = category.quiz.filter(
     (q) => selections[q.id] === q.answer,
   ).length
   const answeredCount = Object.keys(selections).length
@@ -35,10 +35,10 @@ export function Quiz({ chapter, answeredIds, onAnswerCorrect }: QuizProps) {
       <div className="flex items-center justify-between rounded-xl border border-border bg-card px-5 py-4">
         <div>
           <h3 className="text-base font-semibold text-foreground">
-            Quiz – {chapter.title}
+            Quiz – {category.title}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {answeredCount} / {chapter.quiz.length} beantwortet · {correctCount}{" "}
+            {answeredCount} / {category.quiz.length} beantwortet · {correctCount}{" "}
             richtig
           </p>
         </div>
@@ -52,7 +52,7 @@ export function Quiz({ chapter, answeredIds, onAnswerCorrect }: QuizProps) {
         </button>
       </div>
 
-      {chapter.quiz.map((q, qi) => {
+      {category.quiz.map((q, qi) => {
         const selected = selections[q.id]
         const isAnswered = selected !== undefined
         return (

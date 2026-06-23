@@ -1,27 +1,32 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import * as React from "react"
 import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-import type { Chapter } from "@/lib/course-data"
+import type { Category } from "@/lib/course-data"
 
 type FlashcardsProps = {
-  chapter: Chapter
+  category: Category
 }
 
-export function Flashcards({ chapter }: FlashcardsProps) {
-  const cards = useMemo(
+export function Flashcards({ category }: FlashcardsProps) {
+  const cards = React.useMemo(
     () =>
-      chapter.topics.map((t) => ({
+      category.topics.map((t) => ({
         id: t.id,
         front: t.title,
         back: t.description,
       })),
-    [chapter],
+    [category],
   )
 
-  const [index, setIndex] = useState(0)
-  const [flipped, setFlipped] = useState(false)
+  const [index, setIndex] = React.useState(0)
+  const [flipped, setFlipped] = React.useState(false)
+
+  React.useEffect(() => {
+    setIndex(0)
+    setFlipped(false)
+  }, [category])
 
   const card = cards[index]
 
@@ -30,13 +35,21 @@ export function Flashcards({ chapter }: FlashcardsProps) {
     setIndex((prev) => (prev + delta + cards.length) % cards.length)
   }
 
+  if (cards.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted-foreground">
+        Keine Lernkarten in dieser Kategorie vorhanden.
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-xl">
       <div className="mb-3 flex items-center justify-between text-sm text-muted-foreground">
         <span>
           Lernkarte {index + 1} / {cards.length}
         </span>
-        <span>{chapter.title}</span>
+        <span>{category.title}</span>
       </div>
 
       <div className="relative" style={{ perspective: 1200 }}>
@@ -49,7 +62,7 @@ export function Flashcards({ chapter }: FlashcardsProps) {
             animate={{ rotateY: 0, opacity: 1 }}
             exit={{ rotateY: -90, opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="flex min-h-52 w-full flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-card p-8 text-center"
+            className="flex min-h-[13rem] w-full flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-card p-8 text-center"
           >
             <span className="text-xs font-medium uppercase tracking-wide text-accent">
               {flipped ? "Erklärung" : "Begriff"}
@@ -57,8 +70,8 @@ export function Flashcards({ chapter }: FlashcardsProps) {
             <span
               className={
                 flipped
-                  ? "leading-relaxed text-muted-foreground"
-                  : "text-xl font-semibold text-foreground text-balance"
+                  ? "leading-relaxed text-muted-foreground text-sm"
+                  : "text-lg font-semibold text-foreground text-balance"
               }
             >
               {flipped ? card.back : card.front}

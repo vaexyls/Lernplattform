@@ -1,12 +1,16 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import * as React from "react"
 import { BookOpen, Layers, ListChecks, Menu, Bookmark } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import {
-  chapters,
+  years,
   TOTAL_QUESTIONS,
-  type Chapter,
+  COURSE_TITLE,
+  COURSE_SUBTITLE,
+  type YearNumber,
+  type Category,
+  type Topic,
 } from "@/lib/course-data"
 import { useProgress } from "@/hooks/use-progress"
 import { Sidebar } from "@/components/sidebar"
@@ -20,23 +24,40 @@ type ViewMode = "lernen" | "quiz" | "karten"
 
 export default function Page() {
   const { state, hydrated, markAnswered, toggleBookmark } = useProgress()
-  const [activeChapterId, setActiveChapterId] = useState(chapters[0].id)
-  const [view, setView] = useState<ViewMode>("lernen")
-  const [activeTopic, setActiveTopic] = useState<string | null>(null)
-  const [search, setSearch] = useState("")
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [showBookmarksOnly, setShowBookmarksOnly] = useState(false)
+  const [activeYear, setActiveYear] = React.useState<YearNumber>(years[0].year)
+  const [activeCategory, setActiveCategory] = React.useState<string | null>(null)
+  const [view, setView] = React.useState<ViewMode>("lernen")
+  const [activeTopic, setActiveTopic] = React.useState<string | null>(null)
+  const [search, setSearch] = React.useState("")
+  const [sidebarOpen, setSidebarOpen] = React.useState(false)
+  const [showBookmarksOnly, setShowBookmarksOnly] = React.useState(false)
 
-  const activeChapter =
-    chapters.find((c) => c.id === activeChapterId) ?? chapters[0]
+  const currentYearData = years.find((y) => y.year === activeYear) || years[0]
+  const currentCategoryData = activeCategory
+    ? currentYearData.categories.find((c) => c.id === activeCategory)
+    : currentYearData.categories[0]
 
-  const chapterProgress = useMemo(() => {
+  // Set initial active category if not set or if year changes
+  React.useEffect(() => {
+    if (!activeCategory && currentCategoryData) {
+      setActiveCategory(currentCategoryData.id)
+    }
+    if (activeCategory && !currentYearData.categories.some(c => c.id === activeCategory)) {
+      setActiveCategory(currentYearData.categories[0]?.id || null)
+    }
+  }, [activeYear, activeCategory, currentYearData])
+
+  const categoryProgress = React.useMemo(() => {
     const map: Record<string, number> = {}
-    for (const ch of chapters) {
-      const answered = ch.quiz.filter((q) =>
-        state.answered.includes(q.id),
-      ).length
-      map[ch.id] = ch.quiz.length ? (answered / ch.quiz.length) * 100 : 0
+    for (const year of years) {
+      for (const category of year.categories) {
+        const answered = category.quiz.filter((q) =>
+          state.answered.includes(q.id),
+        ).length
+        map[category.id] = category.quiz.length
+          ? (answered / category.quiz.length) * 100
+          : 0
+      }
     }
     return map
   }, [state.answered])
@@ -46,8 +67,19 @@ export default function Page() {
     ? (totalAnswered / TOTAL_QUESTIONS) * 100
     : 0
 
-  function handleSelectTopic(chapterId: string, topicId: string) {
-    setActiveChapterId(chapterId)
+  const handleSelectYear = React.useCallback((year: YearNumber) => {
+    setActiveYear(year)
+    setActiveCategory(null) // Reset category when year changes
+    setActiveTopic(null)
+    setView("lernen")
+    setShowBookmarksOnly(false)
+    setSidebarOpen(false)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }, [])
+
+  const handleSelectTopic = React.useCallback((year: YearNumber, categoryId: string, topicId: string) => {
+    setActiveYear(year)
+    setActiveCategory(categoryId)
     setView("lernen")
     setActiveTopic(topicId)
     setShowBookmarksOnly(false)
@@ -57,29 +89,34 @@ export default function Page() {
         .getElementById(topicId)
         ?.scrollIntoView({ behavior: "smooth", block: "start" })
     })
-  }
+  }, [])
 
-  function handleSelectQuiz(chapterId: string) {
-    setActiveChapterId(chapterId)
+  const handleSelectQuiz = React.useCallback((year: YearNumber, categoryId: string) => {
+    setActiveYear(year)
+    setActiveCategory(categoryId)
     setView("quiz")
     setActiveTopic(null)
     setSidebarOpen(false)
     window.scrollTo({ top: 0, behavior: "smooth" })
-  }
+  }, [])
 
-  const visibleTopics = showBookmarksOnly
-    ? activeChapter.topics.filter((t) => state.bookmarks.includes(t.id))
-    : activeChapter.topics
+  const visibleTopics = currentCategoryData
+    ? (showBookmarksOnly
+        ? currentCategoryData.topics.filter((t) => state.bookmarks.includes(t.id))
+        : currentCategoryData.topics)
+    : []
 
   return (
     <div className="flex min-h-screen bg-background">
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-80 shrink-0 border-r border-sidebar-border lg:block">
         <Sidebar
+          activeYear={activeYear}
+          onSelectYear={handleSelectYear}
           activeTopic={activeTopic}
           onSelectTopic={handleSelectTopic}
           onSelectQuiz={handleSelectQuiz}
-          chapterProgress={chapterProgress}
+          categoryProgress={categoryProgress}
           search={search}
           onSearch={setSearch}
         />
@@ -104,10 +141,12 @@ export default function Page() {
               className="fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] border-r border-sidebar-border lg:hidden"
             >
               <Sidebar
+                activeYear={activeYear}
+                onSelectYear={handleSelectYear}
                 activeTopic={activeTopic}
                 onSelectTopic={handleSelectTopic}
                 onSelectQuiz={handleSelectQuiz}
-                chapterProgress={chapterProgress}
+                categoryProgress={categoryProgress}
                 search={search}
                 onSearch={setSearch}
                 onClose={() => setSidebarOpen(false)}
@@ -149,11 +188,10 @@ export default function Page() {
               Lernplattform by Luca
             </span>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground text-balance sm:text-4xl">
-              Netzwerktechnik – Grundlagen und Dienste
+              {COURSE_TITLE} - {currentYearData.title}
             </h1>
             <p className="mt-2 text-muted-foreground">
-              Kapitel {activeChapter.number}: {activeChapter.title} ·{" "}
-              {activeChapter.subtitle}
+              {currentCategoryData?.title || "Kategorie auswählen"}
             </p>
           </header>
 
@@ -207,7 +245,7 @@ export default function Page() {
               {visibleTopics.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted-foreground">
                   {showBookmarksOnly
-                    ? "Noch keine Themen in diesem Kapitel gemerkt."
+                    ? "Noch keine Themen in dieser Kategorie gemerkt."
                     : "Keine Themen vorhanden."}
                 </div>
               ) : (
@@ -224,25 +262,23 @@ export default function Page() {
             </div>
           )}
 
-          {view === "karten" && <Flashcards chapter={activeChapter} />}
+          {view === "karten" && currentCategoryData && (
+            <Flashcards category={currentCategoryData} />
+          )}
 
-          {view === "quiz" && (
+          {view === "quiz" && currentCategoryData && (
             <Quiz
-              chapter={activeChapter}
+              category={currentCategoryData}
               answeredIds={state.answered}
               onAnswerCorrect={markAnswered}
             />
           )}
 
-          {/* Chapter pager */}
-          <ChapterPager
-            current={activeChapter}
-            onSelect={(id) => {
-              setActiveChapterId(id)
-              setActiveTopic(null)
-              setShowBookmarksOnly(false)
-              window.scrollTo({ top: 0, behavior: "smooth" })
-            }}
+          {/* Category pager */}
+          <CategoryPager
+            currentCategory={currentCategoryData}
+            currentYear={currentYearData}
+            onSelect={handleSelectTopic}
           />
         </div>
       </main>
@@ -278,44 +314,95 @@ function ViewTab({
   )
 }
 
-function ChapterPager({
-  current,
+function CategoryPager({
+  currentCategory,
+  currentYear,
   onSelect,
 }: {
-  current: Chapter
-  onSelect: (id: string) => void
+  currentCategory: Category | undefined
+  currentYear: {
+    year: YearNumber;
+    title: string;
+    categories: Category[];
+  }
+  onSelect: (year: YearNumber, categoryId: string, topicId: string) => void
 }) {
-  const idx = chapters.findIndex((c) => c.id === current.id)
-  const prev = chapters[idx - 1]
-  const next = chapters[idx + 1]
+  if (!currentCategory) return null
+
+  const categoryIndex = currentYear.categories.findIndex(
+    (cat) => cat.id === currentCategory.id,
+  )
+
+  const prevCategory = currentYear.categories[categoryIndex - 1]
+  const nextCategory = currentYear.categories[categoryIndex + 1]
+
+  const prevYearData = years.find(y => y.year === currentYear.year - 1)
+  const nextYearData = years.find(y => y.year === currentYear.year + 1)
+
+  const firstTopicInPrevCategory = prevCategory?.topics[0]
+  const firstTopicInNextCategory = nextCategory?.topics[0]
+
+  const lastCategoryInPrevYear = prevYearData?.categories[prevYearData.categories.length - 1]
+  const firstTopicInLastCategoryOfPrevYear = lastCategoryInPrevYear?.topics[0]
+
+  const firstCategoryInNextYear = nextYearData?.categories[0]
+  const firstTopicInFirstCategoryOfNextYear = firstCategoryInNextYear?.topics[0]
+
   return (
     <div className="mt-10 grid gap-3 border-t border-border pt-6 sm:grid-cols-2">
-      {prev ? (
+      {(prevCategory && firstTopicInPrevCategory) ? (
         <button
           type="button"
-          onClick={() => onSelect(prev.id)}
+          onClick={() => onSelect(currentYear.year, prevCategory.id, firstTopicInPrevCategory.id)}
           className="rounded-xl border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary/40"
         >
-          <span className="text-xs text-muted-foreground">Vorheriges Kapitel</span>
+          <span className="text-xs text-muted-foreground">Vorherige Kategorie</span>
           <span className="block text-sm font-medium text-foreground">
-            {prev.number}. {prev.title}
+            {prevCategory.title}
+          </span>
+        </button>
+      ) : (lastCategoryInPrevYear && firstTopicInLastCategoryOfPrevYear) ? (
+        <button
+          type="button"
+          onClick={() => onSelect(prevYearData!.year, lastCategoryInPrevYear.id, firstTopicInLastCategoryOfPrevYear.id)}
+          className="rounded-xl border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary/40"
+        >
+          <span className="text-xs text-muted-foreground">Vorheriges Jahr</span>
+          <span className="block text-sm font-medium text-foreground">
+            {prevYearData!.title} - {lastCategoryInPrevYear.title}
           </span>
         </button>
       ) : (
         <span />
       )}
-      {next && (
+      {(nextCategory && firstTopicInNextCategory) ? (
         <button
           type="button"
-          onClick={() => onSelect(next.id)}
+          onClick={() => onSelect(currentYear.year, nextCategory.id, firstTopicInNextCategory.id)}
           className="rounded-xl border border-border bg-card px-4 py-3 text-right transition-colors hover:border-primary/40 sm:col-start-2"
         >
-          <span className="text-xs text-muted-foreground">Nächstes Kapitel</span>
+          <span className="text-xs text-muted-foreground">Nächste Kategorie</span>
           <span className="block text-sm font-medium text-foreground">
-            {next.number}. {next.title}
+            {nextCategory.title}
           </span>
         </button>
+      ) : (firstCategoryInNextYear && firstTopicInFirstCategoryOfNextYear) ? (
+        <button
+          type="button"
+          onClick={() => onSelect(nextYearData!.year, firstCategoryInNextYear.id, firstTopicInFirstCategoryOfNextYear.id)}
+          className="rounded-xl border border-border bg-card px-4 py-3 text-right transition-colors hover:border-primary/40 sm:col-start-2"
+        >
+          <span className="text-xs text-muted-foreground">Nächstes Jahr</span>
+          <span className="block text-sm font-medium text-foreground">
+            {nextYearData!.title} - {firstCategoryInNextYear.title}
+          </span>
+        </button>
+      ) : (
+        <span />
       )}
     </div>
   )
 }
+
+
+
